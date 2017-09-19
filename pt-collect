@@ -1,0 +1,97 @@
+#!/bin/bash
+PATH="/bin:/usr/bin"
+set -e 
+PLUGINDIR="./plugins"
+test -e plugins.sh && source plugins.sh || ( echo "can't find plugins.sh"; exit 1 )
+
+OUTPUTDIR=$(mktemp -d)
+ 
+function getPlugins() {
+	plugin=$1
+	local toret=""
+	if [ -z "${!plugin}" ]; then
+		toret="$toret $plugin"
+	else
+		tmp="${plugin}[@]"
+		for t in "${!tmp}"; do
+			if [ -z "{$!t}" ]; then
+				toret="$toret $t"
+			else
+				p=$( getPlugins $t)
+				toret="$toret $p"
+			fi;
+		done;
+	fi;
+
+	echo $toret
+}
+
+
+#
+# 1. dry-run
+# 2. output
+# 3. requirments
+# 4. os-detection
+#
+
+OS=$(lsb_release -s -i)
+OSVERSION=$(lsb_release -s -r | cut -f1 -d.)
+
+function usage() {
+	echo "Available plugins:"
+	for i in ${PLUGINS[@]}; do
+		p=$(getPlugins $i)
+		if [ "$i" == "$p" ]; then
+			echo $i
+		else
+			echo "$i: $p"
+		fi;
+	done;
+}
+
+test -n "$1" || ( usage; exit 1 )
+pluginExists=0	
+for plugin in ${PLUGINS[@]}; do
+	if [ "$plugin" == "$1" ]; then
+		pluginExists=1
+	fi
+done
+
+if [ "$pluginExists" -eq 0 ]; then
+	usage
+	exit 1
+fi
+
+function packageRequired() {
+	 echo "$1 is missing. You can install it with:"
+	case $OS in
+		"Debian")
+			>&2 echo -e "\t apt-get install $1"
+			;;
+		"CentOS")
+			>&2 echo -e "\t yum install $1"
+			;;
+	esac;
+}
+
+
+set +e
+
+
+plugin=$(getPlugins $1)
+
+echo "Plugins to run: $plugin"
+
+for p in $plugin; do
+	source $PLUGINDIR/$p.sh;
+	${p}_requirments
+	if [ $? -eq 1 ]; then exit 1; fi;
+done;
+
+for p in $plugin; do
+	echo "Running $p"
+	${p}_run | tee $OUTPUTDIR/$p
+done;cd 
+
+tar czf /tmp/pt-collect.tar.gz $OUTPUTDIR
+#rm -rf $OUTPUTDIR
