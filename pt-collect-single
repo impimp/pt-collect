@@ -1,11 +1,51 @@
 #!/bin/bash
 set -e 
-test -e plugins.sh && source plugins.sh || ( echo "can't find plugins.sh"; exit 1 )
 
-PLUGINDIR="./plugins"
 PATH="/bin:/usr/bin"
 OUTPUTDIR=$(mktemp -d)
- 
+
+PLUGINS=( "port_open" "pt_stalk_general" "pt_stalk" "pt_summary" "pt_mysql_summary" "pt_all_summaries" "dummy" "dummy_chain" )
+pt_stalk_general=( "pt_summary" "pt_mysql_summary" "pt_stalk" )
+dummy_chain=( "dummy" )
+
+
+function dummy_requirments() {
+	return 0;
+}
+
+function dummy_run() {
+	echo "Hello Percona"
+}
+
+function port_open_requirments() {
+	if [ -z "$(which ss)" ] && [ -z "$(which netstat)" ]; then
+		packageRequired "iproute2"
+	fi;
+
+}
+
+function port_open_run() {
+	port=${BASH_ARGV[0]}
+
+	if [ $( ss -H -a "( sport = :${port} or dport = :${port} )" | wc -l ) -gt 0 ]; then
+		echo "Port $port isn't free";
+	else
+		echo "Port $port is free"
+	fi
+}
+function pt_summary_requirments() {
+	if [ -z "$(which wget)" ]; then
+		echo $( packageRequired wget )
+		return 1
+	fi;
+
+	test -e /tmp/pt-summary || (wget https://www.percona.com/get/pt-summary -O /tmp/pt-summary && chmod 755 /tmp/pt-summary )
+}
+
+function pt_summary_run() {
+	/tmp/pt-summary
+}
+
 function getPlugins() {
 	plugin=$1
 	local toret=""
@@ -75,7 +115,6 @@ plugin=$(getPlugins $1)
 echo "Plugins to run: $plugin"
 
 for p in $plugin; do
-	source $PLUGINDIR/$p.sh;
 	${p}_requirments
 	if [ $? -eq 1 ]; then exit 1; fi;
 done;
