@@ -26,14 +26,6 @@ function getPlugins() {
 	echo $toret
 }
 
-
-#
-# 1. dry-run
-# 2. output
-# 3. requirments
-# 4. os-detection
-#
-
 OS=$(lsb_release -s -i)
 OSVERSION=$(lsb_release -s -r | cut -f1 -d.)
 
